@@ -1,0 +1,93 @@
+name: Tests CI
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
+    branches:
+      - develop
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Run Tests
+    strategy:
+      matrix:
+        python-version: ["3.11.8"]
+
+    steps:
+      # Checkout the source code
+      - uses: actions/checkout@v4
+
+      # Set up PostgreSQL 15 with a database and user for tests
+      - uses: harmon758/postgresql-action@v1
+        with:
+          postgresql version: "15"
+          postgresql db: "pipeline"
+          postgresql user: "pipeline"
+          postgresql password: "pipeline123456"
+
+      # Setup Python environment for the specified version
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          check-latest: true
+
+      # Install Redis service on Ubuntu runner
+      - name: Install Redis
+        run: |
+          sudo apt update
+          sudo apt install -y redis
+          redis-server --version
+
+      # Install Python dependencies from requirements
+      - name: Install requirements
+        working-directory: api/tacticalrmm
+        run: |
+          python --version
+          SETTINGS_FILE="tacticalrmm/settings.py"
+          SETUPTOOLS_VER=$(grep "^SETUPTOOLS_VER" "$SETTINGS_FILE" | awk -F'[= "]' '{print $5}')
+          WHEEL_VER=$(grep "^WHEEL_VER" "$SETTINGS_FILE" | awk -F'[= "]' '{print $5}')
+          pip install pip==25.1
+          pip install setuptools==${SETUPTOOLS_VER} wheel==${WHEEL_VER}
+          pip install -r requirements.txt -r requirements-test.txt
+
+      # Check code style with black, excluding migrations folder
+      - name: Codestyle black
+        working-directory: api
+        run: |
+          black --exclude migrations/ --check --diff tacticalrmm
+          if [ $? -ne 0 ]; then
+            exit 1
+          fi
+
+      # Lint code with flake8 using config file
+      - name: Lint with flake8
+        working-directory: api/tacticalrmm
+        run: |
+          flake8 --config .flake8 .
+          if [ $? -ne 0 ]; then
+            exit 1
+          fi
+
+      # Run Django tests using pytest with environment var GHACTIONS
+      - name: Run django tests
+        env:
+          GHACTIONS: "yes"
+        working-directory: api/tacticalrmm
+        run: |
+          pytest
+          if [ $? -ne 0 ]; then
+            exit 1
+          fi
+
+      # Upload coverage report to Codecov
+      - uses: codecov/codecov-action@v3
+        with:
+          directory: ./api/tacticalrmm
+          files: ./api/tacticalrmm/coverage.xml
+          verbose: true
