@@ -55,8 +55,8 @@ jobs:
       - name: Deploy (PyPI example)
         if: github.ref == 'refs/heads/main' && success()
         env:
-          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+          TWINE_USERNAME: ${{ SATHEESH42 }}
+          TWINE_PASSWORD: ${{ SATHEESH@420  }}
         run: |
           pip install twine
           python setup.py sdist bdist_wheel
